@@ -1,0 +1,6 @@
+# Secrets - never commit
+.env
+
+# Local overrides
+.env.local
+*.local

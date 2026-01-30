@@ -1,0 +1,29 @@
+# ======================== Elasticsearch Configuration =========================
+# Mounted config for Docker. Override or supplement with environment variables.
+# See: https://www.elastic.co/guide/en/elasticsearch/reference/current/settings.html
+#
+# ---------------------------------- Cluster -----------------------------------
+cluster.name: "elk-cluster"
+
+# ------------------------------------ Node ------------------------------------
+node.name: "node-1"
+
+# --------------------------------- Discovery ----------------------------------
+# Single-node mode for dev/small prod. For HA, use discovery.seed_hosts and
+# cluster.initial_master_nodes with multiple nodes.
+discovery.type: single-node
+
+# ---------------------------------- Security ----------------------------------
+xpack.security.enabled: true
+# Optional: enable HTTPS and auth for transport (multi-node)
+# xpack.security.transport.ssl.enabled: true
+
+# ---------------------------------- Network -----------------------------------
+# Required so other containers (Kibana, Logstash) can reach this node.
+# Without this, ES may bind to 127.0.0.1 and cause "Connection refused".
+network.host: 0.0.0.0
+# http.port: 9200
+
+# ---------------------------------- Various -----------------------------------
+# Allow wildcard deletion (e.g. DELETE pt-logs-*). Set false for production safety.
+action.destructive_requires_name: false

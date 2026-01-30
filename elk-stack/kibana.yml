@@ -1,0 +1,31 @@
+# ======================== Kibana Configuration =========================
+# Mounted config for Docker. Secrets via environment or keystore.
+# See: https://www.elastic.co/docs/reference/kibana/configuration-reference
+#
+# =================== System: Kibana Server ===================
+server.port: 5601
+# Bind to all interfaces so Docker port mapping works
+server.host: "0.0.0.0"
+server.name: "kibana"
+
+# =================== System: Elasticsearch ===================
+# Elasticsearch backend URL (use service name in Docker)
+elasticsearch.hosts: ["http://elasticsearch:9200"]
+# Service account for Kibana system operations (password via env ELASTICSEARCH_PASSWORD or keystore)
+elasticsearch.username: "kibana_system"
+# elasticsearch.password: set via env ELASTICSEARCH_PASSWORD or kibana-keystore
+
+# =================== Reporting ===================
+# Required when server.host is 0.0.0.0 so PNG/PDF export works
+xpack.reporting.kibanaServer.hostname: localhost
+
+# =================== Security / encryption (production) ===================
+# Generate and set for production to avoid session/alert invalidation on restart:
+#   docker exec kibana bin/kibana-encryption-keys generate
+# Then add the output keys to this file (or use env) and restart Kibana.
+# xpack.security.encryptionKey: "<32+ char key>"
+# xpack.encryptedSavedObjects.encryptionKey: "<32+ char key>"
+# xpack.reporting.encryptionKey: "<32+ char key>"
+
+# =================== System: Logging ===================
+logging.root.level: info

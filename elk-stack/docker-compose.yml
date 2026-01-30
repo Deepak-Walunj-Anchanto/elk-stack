@@ -1,0 +1,92 @@
+# ELK Stack: Elasticsearch, Kibana, Logstash
+# Config files: elasticsearch.yml, kibana.yml, logstash.conf
+# Secrets: copy .env.example to .env and set passwords (do not commit .env)
+
+volumes:
+  es_data:
+  kibana_config:
+  logstash_config:
+
+networks:
+  elk-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.19.1.0/24
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+      - ./elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+    networks:
+      - elk-net
+    restart: unless-stopped
+    healthcheck:
+      # With security enabled, unauthenticated request returns 401; that is enough to know ES is up
+      test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://localhost:9200 | grep -qE '200|401' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      ELASTICSEARCH_USERNAME: "kibana_system"
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:?Set ELASTICSEARCH_PASSWORD in .env (kibana_system user password)}
+    volumes:
+      - kibana_config:/usr/share/kibana/config
+      - ./kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - elk-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -f http://localhost:5601/api/status | grep -q '\"state\":\"green\"\\|\"state\":\"yellow\"' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: logstash
+    ports:
+      - "5044:5044"
+      - "9600:9600"
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - logstash_config:/usr/share/logstash/config
+    environment:
+      xpack.monitoring.enabled: "true"
+      xpack.monitoring.elasticsearch.hosts: "http://elasticsearch:9200"
+      xpack.monitoring.elasticsearch.username: "logstash_system"
+      xpack.monitoring.elasticsearch.password: ${LOGSTASH_SYSTEM_PASSWORD:?Set LOGSTASH_SYSTEM_PASSWORD in .env}
+      LOGSTASH_WRITER_PASSWORD: ${LOGSTASH_WRITER_PASSWORD:?Set LOGSTASH_WRITER_PASSWORD in .env}
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - elk-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9600/_node/stats/pipelines?pretty | grep -q '\"running_pipelines\"' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
