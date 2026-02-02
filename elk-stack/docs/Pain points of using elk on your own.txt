@@ -1,0 +1,55 @@
+Pain points of using elk on your own
+
+However, for handling more complex pipelines built for handling large amounts of data in production, additional components are likely to be added into your logging architecture, for resiliency (Kafka, RabbitMQ, Redis) and security (nginx)
+A full production-grade architecture will consist of multiple Elasticsearch nodes, perhaps multiple Logstash instances, an archiving mechanism, an alerting plugin and a full replication across regions or segments of your data center for high availability. 
+
+these recommendations are based on the assertion that you are starting from scratch and require a scalable, highly available, and at least medium-sized ELK deployment
+
+Installing
+Installing ELK is usually hassle-free. Getting up and running with your first instances of Elasticsearch, Logstash, Kibana and Beats (usually Filebeat or Metricbeat, or Fluentd for Kubernetes log collection) is pretty straightforward, and there is plenty of documentation available if you encounter issues during installation
+you need to establish a pipeline into the stack. This pipeline will greatly depend on the type of logs you want to ingest, the volume of log data, and the type of data source from which you are pulling the logs.
+You could be ingesting database logs, web server logs, or application logs. The logs could be coming in from a local instance, AWS, Docker or Kubernetes. Most likely, you will be pulling data from multiple and distributed sources. Configuring the various integrations and pipelines in Logstash can be complicated and extremely frustrating, and configuration errors can bring down your entire logging pipeline.
+
+Parsing
+It’s one thing to ship the logs into the stack. It’s another thing entirely to have them actually mean something. When trying to analyze your data, you need your messages to be structured in a way that makes sense.
+That is where parsing comes into the picture, beautifying the data and enhancing it to allow you to analyze the various fields constructing the log message more easily.
+Fine-tuning Logstash, Fluentd, or any other parsing system to use a grok filter on your logs correctly is an art unto itself and can be extremely time-consuming. 
+
+Mapping
+Elasticsearch mapping defines the different types that reside within an index. It defines the fields for documents of a specific type — the data type (such as string and integer) and how the fields should be indexed and stored in Elasticsearch.
+With dynamic mapping (which is turned on by default), Elasticsearch automatically inspects the JSON properties in documents before indexing and storage. However, if your logs change (something that is common especially with application logs) and you index documents with a different mapping, they will not be indexed by Elasticsearch. So, unless you monitor the Elasticsearch logs, you will likely not notice the resulting “MapperParsingException” error and thereby lose the logs rejected by Elasticsearch.
+
+Scaling
+You’ve got your pipeline set up, and logs are coming into the system. To ensure high availability and scalability, your ELK deployment must be robust enough to handle pressure. For example, an event occurring in production will cause a sudden spike in traffic, with more logs being generated than usual. Such cases will require the installation of additional components on top (or in front) of your ELK Stack.
+Most production-grade ELK deployments now include a queuing system in front of Elasticsearch. This ensures that bottlenecks are not formed during periods of high traffic and Elasticsearch does not cave in during the resulting bursts of data.
+Installing additional Redis or Kafka instances means more time, complexity, and more money, and in any case, you must make sure that these components will scale whenever needed. In addition, you will also need to figure out how and when to scale up your Logstash and Elasticsearch cluster. Manual scaling isn’t the solution – as data bursts can be sudden and dramatic, making it impossible to reliably scale your clusters on time.
+
+Performance tuning
+While built for scalability, speed, and high availability, the ELK Stack — as well as the infrastructure (server, OS, network) on which you chose to set it up — requires fine-tuning and optimization to ensure high performance.
+The number of indices handled by Elasticsearch affects performance, so you will want to make sure you remove or freeze old and unused indices.
+Fine-tuning shard size, configuring partition merges for unused indices, and shard recovery in the case of node failure — these are all tasks that will affect the performance of your ELK Stack deployment and will require planning and implementation.
+Failing to upkeep your Elasticsearch cluster performance can result in slow and inefficient queries, which can potentially knock over your entire stack.
+These are just a few examples of the grunt work that is required to maintain your own ELK deployment. Again, it is totally doable — but it can also be very resource-consuming.
+
+Data retention and archiving
+What happens to all of the data once ingested into Elasticsearch? Indices pile up and eventually — if not taken care of — will cause Elasticsearch to crash and lose your data. If you are running your own stack, you can either scale up or manually remove old indices. Of course, manually performing these tasks in large deployments is not an option, so use Elasticsearch Curator or set up cron jobs to handle them.
+Curation is quickly becoming a de-facto compliance requirement, so you will also need to figure out how to archive logs in their original formats. Archiving to Amazon S3 is the most common solution, but this again costs more time and money to configure and execute. Cloud-hosted ELK solutions such as our Logz.io platform provide this service as part of the bundle.
+
+Handling upgrades
+Handling an ELK Stack upgrade is one of the biggest issues you must consider when deciding whether to deploy ELK on your own. In fact, upgrading a large ELK deployment in production is so daunting a task that you will find plenty of companies that are still using extremely old versions.
+When upgrading Elasticsearch, making sure that you do not lose data is the top priority — so you must pay attention to replication and data synchronization while upgrading one node at a time. Good luck with that if you are running a multi-node cluster! This incremental upgrade method is not even an option when upgrading to a major version, which is an action that requires a full cluster restart.
+Upgrading Kibana can be a serious hassle with plugins breaking and visualizations sometimes needing total rewrites.
+And of course, if you’ve installed other data pipeline components like Kafka, you’ll need to upgrade them as well.
+
+Infrastructure
+Think big. As your business grows, more and more logs are going to be ingested into your ELK Stack. This means more servers, more network usage, and more storage. The overall amount of computing resources needed to process all of this traffic can be substantial.
+Log management systems consume huge amounts of CPU, network bandwidth, disk space, and memory. With sporadic data bursts being a frequent phenomenon — when an error takes place in production, your system for generating a large number of logs — capacity allocation needs to follow suit. The underlying infrastructure needed can amount to hundreds of thousands of dollars per year.
+
+Security
+In most cases, your log data is likely to contain sensitive information about yourself, your customers, or both. Just as you expect your data to be safe, so do your customers. As a result, security features such as authorization and authentication are a must to protect both the logs coming into your ELK Stack specifically and the success of your business in general.
+The problem is that the open source ELK Stack does not provide easy ways to implement enterprise-grade data protection strategies. Ironically, ELK is used extensively for PCI compliance and SIEM but does not include proper security functionality out of the box. If you are running your own stack, your options are not great. You could opt for using the provided basic security features but these are somewhat limited in scope and do not provide advanced security features such as LDAP/AD support, SSO, encryption at rest, and more. Or, you could try to hack your own solution, but as far as I know, there is no easy and fast way to do that.
+
+Monitoring the monitoring stack
+As we’ve covered, there are a number of potential pitfalls to running your own ELK Stack – some of which can cause data loss or poor performance, which can impact troubleshooting for business-critical applications.
+For this reason, you will likely need to monitor your ELK Stack for performance or reliability issues. This means collecting metrics and logs from the ELK Stack itself (but of course, you won’t be able to collect you ELK logs with the same ELK you want to monitor…if it crashes, you won’t have the data to troubleshoot it!).
+Thats just more data to collect, components to upgrade, and infrastructure to manage. More components means more complexity.

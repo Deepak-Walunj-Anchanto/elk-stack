@@ -85,8 +85,9 @@ services:
       - elk-net
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:9600/_node/stats/pipelines?pretty | grep -q '\"running_pipelines\"' || exit 1"]
+      test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://localhost:9600/_node/stats | grep -qE '200|401'"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 60s
+

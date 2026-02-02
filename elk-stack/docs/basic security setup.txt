@@ -1,0 +1,295 @@
+1. Why Security Is Needed in ELK
+By default, older Elasticsearch versions allowed:
+Anonymous access
+Anyone to read/write indices
+Anyone to delete data
+
+Enabling security ensures:
+Every request is authenticated
+Each component has least-privilege access
+Credentials are not hardcoded
+Logs and metrics are protected
+
+🧩 2. Architecture Overview (Corrected)
+| Component          | User Used         | Purpose                              |
+| ------------------ | ----------------- | ------------------------------------ |
+| Human login        | `elastic`         | Full admin access                    |
+| Kibana → ES        | `kibana_system`   | Kibana background tasks              |
+| Logstash (metrics) | `logstash_system` | Logstash monitoring & license checks |
+| Logstash (data)    | `logstash_writer` | Indexing application logs into ES    |
+
+📌 Important distinction
+logstash_system → monitoring only
+logstash_writer → actual log ingestion
+
+👤 3. Built-In and Custom Users
+
+3.1 elastic (Superuser)
+Purpose
+Administrative user
+Full access to cluster, indices, and security APIs
+
+Used for
+Logging into Kibana UI
+Creating roles and users
+Managing index templates and ILM
+Debugging and cluster administration
+
+Why we don’t use it for services
+Too powerful
+Violates least-privilege principle
+High blast radius if compromised
+
+3.2 kibana_system
+
+Purpose
+Internal service account for Kibana
+
+Used for
+Creating .kibana* indices
+Saving dashboards and visualizations
+Running background jobs (telemetry, saved objects)
+
+Important
+❌ Cannot log into Kibana UI
+✔ Used only by the Kibana backend
+
+Why it exists
+Prevents Kibana from using superuser credentials
+Limits impact if Kibana credentials are compromised
+
+3.3 logstash_system (Built-in, Monitoring Only)
+
+Purpose
+Internal service account for Logstash
+
+Used for
+Sending Logstash monitoring data to Elasticsearch
+License validation
+Health checks
+
+❌ What it does NOT do
+❌ Cannot write application logs
+❌ Cannot create or write indices
+
+Why it exists
+Allows Logstash to report health without admin rights
+Prevents abuse of indexing permissions
+
+How it is created
+Automatically created by Elasticsearch
+
+Password is manually set using:
+elasticsearch-reset-password -u logstash_system
+
+3.4 logstash_writer (Custom User – Critical)
+
+Purpose
+Dedicated log ingestion user for Logstash
+
+Used for
+Writing logs into:
+pt-logs-*
+
+Why this user is required
+Built-in logstash_system cannot index data
+Elasticsearch enforces least-privilege
+Prevents Logstash from having admin rights
+
+Security Benefits
+Index-scoped permissions only
+No access to security APIs
+No access to unrelated indices
+
+🐳 4. Docker Compose Configuration – Explained
+
+4.1 Elasticsearch Service
+environment:
+  - discovery.type=single-node
+  - xpack.security.enabled=true
+volumes:
+  - es_data:/usr/share/elasticsearch/data
+
+| Setting                       | Reason                             |
+| ----------------------------- | ---------------------------------- |
+| `discovery.type=single-node`  | Prevents cluster bootstrap issues  |
+| `xpack.security.enabled=true` | Enables authentication             |
+| `es_data`                     | Persists users, passwords, indices |
+
+4.2 Kibana Service
+
+environment:
+  ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+  ELASTICSEARCH_USERNAME: kibana_system
+volumes:
+  - kibana_config:/usr/share/kibana/config
+
+| Item            | Why                      |
+| --------------- | ------------------------ |
+| `kibana_system` | Service authentication   |
+| Keystore        | Secure password storage  |
+| Volume          | Prevents credential loss |
+
+4.3 Logstash Service
+
+environment:
+  # Monitoring
+  xpack.monitoring.enabled: "true"
+  xpack.monitoring.elasticsearch.username: logstash_system
+  xpack.monitoring.elasticsearch.password: "******"
+
+  # Ingestion
+  LOGSTASH_WRITER_PASSWORD: "******"
+
+Why two users are used
+| User              | Purpose              |
+| ----------------- | -------------------- |
+| `logstash_system` | Monitoring & license |
+| `logstash_writer` | Log ingestion        |
+
+📦 5. Docker Volumes – What They Store & Why
+
+5.1 es_data Volume 
+es_data:/usr/share/elasticsearch/data 
+Stores: Indices Users & roles Password hashes Cluster metadata 
+Why critical: Without it, passwords reset on restart Data loss on docker compose down 
+
+5.2 kibana_config Volume 
+kibana_config:/usr/share/kibana/config 
+stores: kibana.keystore 
+Secure settings (ES password) Why critical Prevents re-adding passwords after restart Ensures Kibana reconnects automatically 
+
+5.3 logstash_config Volume 
+logstash_config:/usr/share/logstash/config 
+Stores 
+Internal Logstash state Monitoring metadata 
+Why useful 
+Clean restarts Future TLS configs
+
+🔐 6. Logstash Pipeline Security (logstash.conf)
+
+elasticsearch {
+  hosts => ["http://elasticsearch:9200"]
+  index => "pt-logs-%{+YYYY.MM.dd}"
+  user => "logstash_writer"
+  password => "${LOGSTASH_WRITER_PASSWORD}"
+}
+
+| Without Auth     | With Auth        |
+| ---------------- | ---------------- |
+| 401 / 403 errors | Secure indexing  |
+| Silent drops     | Auditable writes |
+| Insecure         | Least privilege  |
+
+📌 logstash_system is never used in pipeline outputs.
+
+🔁 7. Password Creation & Setup Flow
+
+* Start Elasticsearch only 
+* Reset passwords using: elasticsearch-reset-password 
+* Store Kibana password in keystore 
+* Inject Logstash password via env vars 
+* Restart services
+elastic
+
+Result
+* Passwords persist 
+* Containers can be recreated safely 
+* No secrets in Git
+
+8. code: 
+* docker compose up -d elasticsearch 
+* docker exec -it elasticsearch bin/elasticsearch-reset-password -i -u elastic 
+* docker exec -it elasticsearch bin/elasticsearch-reset-password -i -u kibana_system 
+* docker exec -it elasticsearch bin/elasticsearch-reset-password -i -u logstash_system 
+* docker compose up -d kibana 
+* docker exec -it kibana bin/kibana-keystore create 
+* docker exec -it kibana bin/kibana-keystore add elasticsearch.password 
+* docker compose down kibana 
+* docker compose up -d kibana
+* in localhost:5601:
+	Kibana → Dev Tools → Console
+	PUT _security/role/logstash_writer
+	{
+  		"cluster": ["monitor"],
+  		"indices": [
+    		{
+      				"names": [
+        				"pt-logs-*"
+   				   ],
+      		"privileges": [
+        		"create",
+        		"create_index",
+        		"write",
+        		"index"
+      		]
+    		}
+  		]
+	}
+| Privilege      | Reason                             |
+| -------------- | ---------------------------------- |
+| `create_index` | Allow first-time index creation    |
+| `write`        | Allow bulk writes                  |
+| `index`        | Allow document indexing            |
+| `monitor`      | Required by Logstash output plugin |
+
+*Create User: logstash_writer
+POST _security/user/logstash_writer
+{
+  "password": "StrongPassword",
+  "roles": ["logstash_writer"],
+  "full_name": "Logstash Ingestion User"
+}
+
+Result
+User can only write logs
+No admin or security access
+Safe for production ingestion
+
+* add logstash conf:
+ elasticsearch {
+      hosts => ["elasticsearch:9200"]
+      index => "pt-logs-%{+YYYY.MM.dd}"
+      user => "logstash_writer"
+      password => "${LOGSTASH_WRITER_PASSWORD}"
+    }
+* docker compose up -d logstash
+
+🔗 9. How Authentication Works (End-to-End)
+
+9.1 Kibana → Elasticsearch
+Uses kibana_system
+Access limited to .kibana*
+
+9.2 Logstash → Elasticsearch
+Monitoring: logstash_system
+Indexing: logstash_writer
+
+9.3 User → Kibana
+Logs in as elastic
+Full admin access
+
+✅ 10. Why This Design Is Correct
+
+✔ Secure
+✔ Least-privilege
+✔ Docker-safe
+✔ Restart-proof
+✔ Clear separation of concerns
+✔ Production-aligned
+
+🧱 11. What Can Be Added Later
+
+TLS / HTTPS
+Per-pipeline users
+ILM policies
+Multi-node cluster security
+
+🏁 12. Final Summary
+
+This configuration ensures:
+Elasticsearch is protected
+Kibana authenticates safely
+Logstash monitors and ingests securely
+Credentials persist across restarts
+Security is auditable and scalable
