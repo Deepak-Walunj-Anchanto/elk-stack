@@ -254,6 +254,8 @@ Safe for production ingestion
       password => "${LOGSTASH_WRITER_PASSWORD}"
     }
 * docker compose up -d logstash
+* (In git bash) curl -u elastic:Password -X POST http://localhost:9200/_security/api_key -H "Content-Type: application/json" -d '{"name":"docker-openapi-key"}'
+  To fetch API key to use in OpenAPI
 
 🔗 9. How Authentication Works (End-to-End)
 
