@@ -1,0 +1,28 @@
+{
+  "description": "Apply on ELK server so logstash_writer can create and write to PT data streams (logs-*-pt). Use with _security/role and _security/user APIs.",
+  "role": {
+    "name": "logstash_writer_pt",
+    "PUT": "http://localhost:9200/_security/role/logstash_writer_pt",
+    "body": {
+      "indices": [
+        {
+          "names": ["logs-*-pt"],
+          "privileges": ["create_index", "create_doc", "index", "create", "write", "read"]
+        }
+      ]
+    }
+  },
+  "user": {
+    "name": "logstash_writer",
+    "PUT": "http://localhost:9200/_security/user/logstash_writer",
+    "body": {
+      "password": "<use LOGSTASH_WRITER_PASSWORD from .env>",
+      "roles": ["logstash_writer_pt"],
+      "full_name": "Logstash writer for PT data streams"
+    }
+  },
+  "curl_examples": {
+    "create_role": "curl -s -u elastic:YOUR_ELASTIC_PASSWORD -X POST 'http://localhost:9200/_security/role/logstash_writer_pt' -H 'Content-Type: application/json' -d '{\"indices\":[{\"names\":[\"logs-*-pt\"],\"privileges\":[\"create_index\",\"create_doc\",\"index\",\"create\",\"write\",\"read\"]}]}'",
+    "create_user": "curl -s -u elastic:YOUR_ELASTIC_PASSWORD -X POST 'http://localhost:9200/_security/user/logstash_writer' -H 'Content-Type: application/json' -d '{\"password\":\"YOUR_LOGSTASH_WRITER_PASSWORD\",\"roles\":[\"logstash_writer_pt\"],\"full_name\":\"Logstash writer for PT\"}'"
+  }
+}

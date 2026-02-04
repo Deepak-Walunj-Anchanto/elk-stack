@@ -89,7 +89,7 @@ Dedicated log ingestion user for Logstash
 
 Used for
 Writing logs into:
-pt-logs-*
+logs-*-pt (data streams: logs-django-pt, logs-celery-pt, logs-celerybeat-pt, logs-flower-pt, logs-nginx-pt, logs-react-pt)
 
 Why this user is required
 Built-in logstash_system cannot index data
@@ -169,10 +169,12 @@ Clean restarts Future TLS configs
 🔐 6. Logstash Pipeline Security (logstash.conf)
 
 elasticsearch {
-  hosts => ["http://elasticsearch:9200"]
-  index => "pt-logs-%{+YYYY.MM.dd}"
-  user => "logstash_writer"
-  password => "${LOGSTASH_WRITER_PASSWORD}"
+  hosts                  => ["elasticsearch:9200"]
+  user                   => "logstash_writer_pt"
+  password               => "${LOGSTASH_WRITER_PASSWORD}"
+  manage_template        => false
+  ecs_compatibility      => "v8"
+  data_stream            => true  # Uses data streams (logs-*-pt) instead of indices
 }
 
 | Without Auth     | With Auth        |
@@ -199,7 +201,7 @@ Result
 
 8. code: 
 * docker compose up -d elasticsearch 
-* docker exec -it elasticsearch bin/elasticsearch-reset-password -i -u elastic 
+* docker exec -it elasticsearch bin/elasticsearch-reset-password -i -u elastic
 * docker exec -it elasticsearch bin/elasticsearch-reset-password -i -u kibana_system 
 * docker exec -it elasticsearch bin/elasticsearch-reset-password -i -u logstash_system 
 * docker compose up -d kibana 
@@ -209,23 +211,26 @@ Result
 * docker compose up -d kibana
 * in localhost:5601:
 	Kibana → Dev Tools → Console
-	PUT _security/role/logstash_writer
-	{
-  		"cluster": ["monitor"],
+	PUT _security/role/logstash_writer_pt
+	{   
+      "cluster": ["monitor"],
   		"indices": [
     		{
       				"names": [
-        				"pt-logs-*"
+        				"logs-*-pt"
    				   ],
       		"privileges": [
         		"create",
         		"create_index",
+            "create_doc",
+            "read",
         		"write",
         		"index"
       		]
     		}
   		]
 	}
+
 | Privilege      | Reason                             |
 | -------------- | ---------------------------------- |
 | `create_index` | Allow first-time index creation    |
@@ -234,11 +239,11 @@ Result
 | `monitor`      | Required by Logstash output plugin |
 
 *Create User: logstash_writer
-POST _security/user/logstash_writer
+POST _security/user/logstash_writer_pt
 {
-  "password": "StrongPassword",
-  "roles": ["logstash_writer"],
-  "full_name": "Logstash Ingestion User"
+  "password": "Password",
+  "roles": ["logstash_writer_pt"],
+  "full_name": "Logstash writer for PT data streams"
 }
 
 Result
@@ -246,16 +251,12 @@ User can only write logs
 No admin or security access
 Safe for production ingestion
 
-* add logstash conf:
- elasticsearch {
-      hosts => ["elasticsearch:9200"]
-      index => "pt-logs-%{+YYYY.MM.dd}"
-      user => "logstash_writer"
-      password => "${LOGSTASH_WRITER_PASSWORD}"
-    }
+* add logstash conf
 * docker compose up -d logstash
-* (In git bash) curl -u elastic:Password -X POST http://localhost:9200/_security/api_key -H "Content-Type: application/json" -d '{"name":"docker-openapi-key"}'
+* (In git bash or pwsh) curl -u elastic:Password -X POST http://localhost:9200/_security/api_key -H "Content-Type: application/json" -d '{"name":"docker-openapi-key"}'
   To fetch API key to use in OpenAPI
+* Create elasticsearch index template:
+  curl -u elastic:Password -X PUT "http://localhost:9200/_index_template/pt-logs" -H "Content-Type: application/json" -d @elasticsearch-index-template-pt-logs.json
 
 🔗 9. How Authentication Works (End-to-End)
 

@@ -257,4 +257,21 @@ async def get_health(
         raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
     except ElasticsearchClientError as e:
         _handle_es_error(e)
-######################################################## ALL CAT ENDPOINTS ########################################################
+        
+######################################################## ALL DATA STREAM ENDPOINTS ########################################################
+
+@router.get(
+    "/data_stream",
+    summary="Get the data streams of the cluster.",
+    description="GET _data_stream. Get the data streams of the cluster (API key auth).",
+)
+async def get_data_streams(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+):
+    """Get the data streams of the cluster."""
+    try:
+        return await elasticsearch_service.get_data_streams()
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)

@@ -8,7 +8,7 @@ You followed a sound flow for basic auth. Below is a concise review and correcti
 
 1. **X-Pack security** – `xpack.security.enabled=true` is correct.
 2. **Separate users** – Using `elastic`, `kibana_system`, `logstash_system`, and a custom `logstash_writer` is the right pattern.
-3. **Least privilege** – `logstash_writer` role with only `pt-logs-*`, `express-logs-*`, `fastapi-logs-*` and write privileges is appropriate.
+3. **Least privilege** – `logstash_writer_pt` role with only `logs-*-pt` pattern (data streams: `logs-django-pt`, `logs-celery-pt`, `logs-celerybeat-pt`, `logs-flower-pt`, `logs-nginx-pt`, `logs-react-pt`) and write privileges is appropriate.
 4. **Kibana keystore** – Using `kibana-keystore` for `elasticsearch.password` is a valid option (we also support env var for simplicity).
 5. **Logstash monitoring** – Using `logstash_system` for monitoring and `logstash_writer` for writing is correct.
 

@@ -5,7 +5,7 @@ Single place for all ES calls; keeps routes thin and testable.
 from __future__ import annotations
 
 import httpx
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Dict
 
 from app.core.settings import settings
 
@@ -27,7 +27,7 @@ class ElasticsearchService:
             raise ValueError("ELASTICSEARCH_API_KEY is not set")
         return {"Content-Type": "application/json", "Authorization": f"ApiKey {self.api_key}"}
 
-    async def get_behavioral_analytics_collections(self) -> dict[str, Any]:
+    async def get_behavioral_analytics_collections(self) -> Dict[str, Any]:
         """
         GET /_application/analytics
         Returns all behavioral analytics collections.
@@ -43,7 +43,7 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
 
-    async def get_behavioral_analytics_collection(self, name: str) -> dict[str, Any]:
+    async def get_behavioral_analytics_collection(self, name: str) -> Dict[str, Any]:
         """
         GET /_application/analytics/{name}
         Returns a single behavioral analytics collection by name.
@@ -59,7 +59,7 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
 
-    async def get_cluster_allocation_explain(self) -> dict[str, Any]:
+    async def get_cluster_allocation_explain(self) -> Dict[str, Any]:
         """
         GET /_cluster/allocation/explain
         Explains the allocation of a shard to a node.
@@ -79,7 +79,7 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
 
-    async def list_all_shards(self, index: Optional[str] = None) -> List[dict[str, Any]]:
+    async def list_all_shards(self, index: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         GET /_cat/shards
         Lists all shards in the cluster.
@@ -101,7 +101,7 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
 
-    async def list_all_aliases(self, alias_name: Optional[str] = None) -> List[dict[str, Any]]:
+    async def list_all_aliases(self, alias_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         GET /_cat/aliases
         Lists all aliases in the cluster.
@@ -123,7 +123,7 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
     
-    async def list_all_indices(self, index: Optional[str] = None) -> List[dict[str, Any]]:
+    async def list_all_indices(self, index: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         GET /_cat/indices
         Lists all indices in the cluster.
@@ -145,7 +145,7 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
     
-    async def get_shard_allocation_information(self, node_id: Optional[str] = None) -> List[dict[str, Any]]:
+    async def get_shard_allocation_information(self, node_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         GET /_cat/allocation
         Get shard allocation information.
@@ -167,7 +167,7 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
     
-    async def get_document_count(self, index: Optional[str] = None) -> List[dict[str, Any]]:
+    async def get_document_count(self, index: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         GET /_cat/count
         Get document count for a data stream, an index, or an entire cluster.
@@ -189,7 +189,7 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
     
-    async def get_master(self) -> dict[str, Any]:
+    async def get_master(self) -> Dict[str, Any]:
         """
         GET /_cat/master
         Get the master of the cluster.
@@ -209,7 +209,7 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
     
-    async def get_data_frame_analytics(self, id: Optional[str] = None) -> List[dict[str, Any]]:
+    async def get_data_frame_analytics(self, id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         GET /_cat/ml/data_frame/analytics
         Get the data frame analytics of the cluster.
@@ -231,7 +231,7 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
     
-    async def get_nodes(self) -> List[dict[str, Any]]:
+    async def get_nodes(self) -> List[Dict[str, Any]]:
         """
         GET /_cat/nodes
         Get the nodes of the cluster.
@@ -251,7 +251,7 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
     
-    async def get_templates(self, name: Optional[str] = None) -> List[dict[str, Any]]:
+    async def get_templates(self, name: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         GET /_cat/templates
         Get the templates of the cluster.
@@ -273,7 +273,7 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
     
-    async def get_thread_pool(self, thread_pool: Optional[str] = None) -> List[dict[str, Any]]:
+    async def get_thread_pool(self, thread_pool: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         GET /_cat/thread_pool
         Get the thread pool of the cluster.
@@ -295,7 +295,7 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
     
-    async def get_health(self) -> dict[str, Any]:
+    async def get_health(self) -> Dict[str, Any]:
         """
         GET /_cat/health
         Get the health of the cluster.
@@ -314,3 +314,29 @@ class ElasticsearchService:
                 body = response.text
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
+    
+    ######################################################## ALL DATA STREAM ENDPOINTS ########################################################
+    
+    async def get_data_streams(self, name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        GET /_data_stream
+        Get the data streams of the cluster.
+        """
+        path = "/_data_stream"
+        if name:
+            path += f"/{name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    ######################################################## ALL DATA STREAM ENDPOINTS ########################################################
