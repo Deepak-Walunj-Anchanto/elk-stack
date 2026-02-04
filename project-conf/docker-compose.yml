@@ -1,0 +1,58 @@
+# Dev: Django writes to apps/logs/app.log (project dir). Filebeat reads that path and ships to Logstash.
+# Local ELK: start your ELK stack, then run this. Filebeat uses host.docker.internal:5044 to reach Logstash on the host.
+services:
+  redis:
+    image: redis
+    container_name: tracking_redis_mt_dev
+    ports:
+      - '6379:6379'
+    command: redis-server --save 60 1 --loglevel warning --requirepass pSr2SjEwqqyJVgo76VA6oC8tsT7HYSFcFBfEgME98b2CWcNsHRtyQUog6sTK
+    networks:
+      - tracking-network
+  django:
+    build:
+      context: .
+      dockerfile: docker/local/django/Dockerfile
+    image: tracking_django_mt_dev
+    container_name: tracking_django_mt_dev
+    volumes:
+      - .:/app:z
+    env_file:
+      - .envs/.pt/.local/.django
+      - .envs/.pt/.local/.s3
+      - .envs/.pt/.local/.anymail
+      - .envs/.pt/.local/.integration
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      DEPLOY_ENV: "LOCAL"
+      IS_PT: "True"
+    ports:
+      - "8000:8000"
+      - "8010:8010"
+    depends_on:
+      - redis
+    command: /start
+    networks:
+      - tracking-network
+
+  filebeat:
+    build:
+      context: .
+      dockerfile: docker/filebeat/Dockerfile
+    image: bhagat-singh-filebeat
+    container_name: filebeat
+    restart: unless-stopped
+    volumes:
+      # Same project dir as Django so Filebeat reads apps/logs/app.log
+      - .:/app:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - LOGSTASH_HOST=${LOGSTASH_HOST:-host.docker.internal}
+      - LOGSTASH_PORT=${LOGSTASH_PORT:-5044}
+    networks:
+      - tracking-network
+
+networks:
+  tracking-network:

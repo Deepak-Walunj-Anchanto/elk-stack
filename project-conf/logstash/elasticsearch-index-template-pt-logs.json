@@ -1,0 +1,24 @@
+{
+  "index_patterns": ["logs-*-pt"],
+  "data_stream": {},
+  "priority": 150,
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "message": { "type": "text" },
+        "group": { "type": "keyword" },
+        "service": { "type": "keyword" },
+        "stream": { "type": "keyword" },
+        "logger_name": { "type": "keyword" },
+        "log_level": { "type": "keyword" },
+        "log_message": { "type": "text" },
+        "app_module": { "type": "keyword" }
+      }
+    }
+  }
+}

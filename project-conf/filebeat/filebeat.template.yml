@@ -1,0 +1,93 @@
+# Filebeat: dev only. Single service (django) produces 6 log files by stream.
+# LOGSTASH_HOST and LOGSTASH_PORT are substituted at runtime. Default: host.docker.internal:5044 for local ELK.
+#
+# Six streams (base.py): django, server, system, aws, network, app → django.log, server.log, system.log, aws.log, network.log, app.log
+# All go to data stream logs-django-pt with field "stream" set by which file was read.
+
+filebeat.inputs:
+  - type: filestream
+    id: pt-django-stream-django
+    paths:
+      - /app/apps/logs/django.log
+    processors:
+      - add_fields:
+          target: ""
+          fields:
+            group: "pt"
+            service: "django"
+            stream: "django"
+
+  - type: filestream
+    id: pt-django-stream-server
+    paths:
+      - /app/apps/logs/server.log
+    processors:
+      - add_fields:
+          target: ""
+          fields:
+            group: "pt"
+            service: "django"
+            stream: "server"
+
+  - type: filestream
+    id: pt-django-stream-system
+    paths:
+      - /app/apps/logs/system.log
+    processors:
+      - add_fields:
+          target: ""
+          fields:
+            group: "pt"
+            service: "django"
+            stream: "system"
+
+  - type: filestream
+    id: pt-django-stream-aws
+    paths:
+      - /app/apps/logs/aws.log
+    processors:
+      - add_fields:
+          target: ""
+          fields:
+            group: "pt"
+            service: "django"
+            stream: "aws"
+
+  - type: filestream
+    id: pt-django-stream-network
+    paths:
+      - /app/apps/logs/network.log
+    processors:
+      - add_fields:
+          target: ""
+          fields:
+            group: "pt"
+            service: "django"
+            stream: "network"
+
+  - type: filestream
+    id: pt-django-stream-app
+    paths:
+      - /app/apps/logs/app.log
+    processors:
+      - add_fields:
+          target: ""
+          fields:
+            group: "pt"
+            service: "django"
+            stream: "app"
+
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+
+processors:
+  - add_cloud_metadata: ~
+  - add_host_metadata: ~
+
+output.logstash:
+  hosts: ["${LOGSTASH_HOST}:${LOGSTASH_PORT}"]
+
+logging.level: info
+logging.to_stderr: true
+logging.to_files: false
