@@ -8,6 +8,7 @@ import httpx
 from typing import Any, Optional, List, Dict
 
 from app.core.settings import settings
+from app.models.elasticsearch import DataStreamModifyRequest
 
 class ElasticsearchClientError(Exception):
     """Raised when an ES request fails; status and body available for mapping to HTTP."""
@@ -339,4 +340,145 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
     
-    ######################################################## ALL DATA STREAM ENDPOINTS ########################################################
+    async def delete_data_stream(self, name: str) -> Dict[str, Any]:
+        """
+        DELETE /_data_stream/{name}
+        Delete a data stream.
+        """
+        path = f"/_data_stream/{name}"
+        url = f"{self.url}{path}"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.delete(url, headers=self._headers())
+    
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def get_data_stream_stats(self, name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        GET /_data_stream/_stats
+        Get the stats of the data streams.
+        """
+        path = "/_data_stream/_stats"
+        if name:
+            path = f"/_data_stream/{name}/_stats"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def get_data_stream_lifecycle(self, name: str) -> Dict[str, Any]:
+        f"""
+        GET /_data_stream/{name}/_lifecycle
+        Get the data stream lifecycle configuration of one or more data streams.
+        """
+        path = f"/_data_stream/{name}/_lifecycle"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def update_data_stream_lifecycle(self, name: str, data_retention: str) -> Dict[str, Any]:
+        f"""
+        PUT /_data_stream/{name}/_lifecycle
+        Update the data stream lifecycle configuration of the data stream.
+        """
+        path = f"/_data_stream/{name}/_lifecycle"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        json = {
+            "data_retention": data_retention
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.put(url, headers=self._headers(), params=params, json=json)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def get_data_stream_mappings(self, name: str) -> Dict[str, Any]:
+        f"""
+        GET /_data_stream/{name}/_mappings
+        Get the data stream mappings of the data stream.
+        """
+        path = f"/_data_stream/{name}/_mappings"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def modify_data_stream(self, actions: DataStreamModifyRequest) -> Dict[str, Any]:
+        f"""
+        POST /_data_stream/_modify
+        Update the data stream of the data stream.
+        """
+        path = f"/_data_stream/_modify"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params, json=actions.model_dump(exclude_none=True))
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def promote_data_stream(self, name: str) -> Dict[str, Any]:
+        f"""
+        POST /_data_stream/_promote/{name}
+        Promote a data stream from a replicated data stream managed by cross-cluster replication (CCR) to a regular data stream.
+        """
+        path = f"/_data_stream/_promote/{name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
