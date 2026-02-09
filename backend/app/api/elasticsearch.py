@@ -2,12 +2,15 @@
 Elasticsearch proxy routes. All ES calls use API key auth (no basic auth).
 Thin layer: validate input, call service, map errors to HTTP.
 """
-from typing import Any, Optional, List
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Depends, Path, Query, Body
 from app.core.deps import get_elasticsearch_service
 from app.services.elasticsearch import ElasticsearchService, ElasticsearchClientError
-from app.models.elasticsearch import DataStreamLifecycleRequest, DataStreamModifyRequest
+from app.models.elasticsearch import (DataStreamLifecycleRequest, DataStreamModifyRequest, 
+    SearchInIndexRequest, SearchMultipleDocumentsRequest, ReindexRequest, ClusterAllocationExplainRequest,
+    IndexTemplateRequest, ComponentTemplateRequest, CreateIndexRequest, RollOverIndexRequest,
+    CreateAliasRequest)
 from app.schemas.elasticsearch import StandardResponse
 
 router = APIRouter(prefix="/es", tags=["Elasticsearch"])
@@ -42,13 +45,14 @@ def _handle_es_error(exc: ElasticsearchClientError) -> None:
 )
 async def get_cluster_allocation_explain(
     elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    body: Optional[ClusterAllocationExplainRequest] = Body(default=None, description="Cluster allocation explain request")
 ):
     """Get cluster allocation explain."""
     try:
-        result = await elasticsearch_service.get_cluster_allocation_explain()
+        result = await elasticsearch_service.get_cluster_allocation_explain(body)
         return StandardResponse(success=True, message="Cluster allocation explain retrieved successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
 
@@ -70,7 +74,7 @@ async def list_all_shards(
         result = await elasticsearch_service.list_all_shards(index)
         return StandardResponse(success=True, message="Shards retrieved successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
 
@@ -91,7 +95,7 @@ async def list_all_aliases(
         result = await elasticsearch_service.list_all_aliases(alias_name)
         return StandardResponse(success=True, message="Aliases retrieved successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
@@ -112,7 +116,7 @@ async def list_all_indices(
         result = await elasticsearch_service.list_all_indices(index)
         return StandardResponse(success=True, message="Indices retrieved successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
@@ -133,7 +137,7 @@ async def get_shard_allocation_information(
         result = await elasticsearch_service.get_shard_allocation_information(node_id)
         return StandardResponse(success=True, message="Shard allocation information retrieved successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
@@ -154,7 +158,7 @@ async def get_document_count(
         result = await elasticsearch_service.get_document_count(index)
         return StandardResponse(success=True, message="Document count retrieved successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
@@ -171,7 +175,7 @@ async def get_master(
         result = await elasticsearch_service.get_master()
         return StandardResponse(success=True, message="Master retrieved successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
@@ -192,7 +196,7 @@ async def get_data_frame_analytics(
         result = await elasticsearch_service.get_data_frame_analytics(id)
         return StandardResponse(success=True, message="Data frame analytics retrieved successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
@@ -209,7 +213,7 @@ async def get_nodes(
         result = await elasticsearch_service.get_nodes()
         return StandardResponse(success=True, message="Nodes retrieved successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
@@ -230,7 +234,7 @@ async def get_templates(
         result = await elasticsearch_service.get_templates(name)
         return StandardResponse(success=True, message="Templates retrieved successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
@@ -251,7 +255,7 @@ async def get_thread_pool(
         result = await elasticsearch_service.get_thread_pool(thread_pool)
         return StandardResponse(success=True, message="Thread pool retrieved successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
 
@@ -268,7 +272,7 @@ async def get_health(
         result = await elasticsearch_service.get_health()
         return StandardResponse(success=True, message="Health retrieved successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
@@ -291,7 +295,7 @@ async def get_data_streams(
         result = await elasticsearch_service.get_data_streams(name)
         return StandardResponse(success=True, message="Data streams retrieved successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
@@ -311,7 +315,7 @@ async def delete_data_stream(
         result = await elasticsearch_service.delete_data_stream(name)
         return StandardResponse(success=True, message="Data stream deleted successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
@@ -332,7 +336,7 @@ async def get_data_stream_lifecycle(
         result = await elasticsearch_service.get_data_stream_lifecycle(name)
         return StandardResponse(success=True, message="Data stream lifecycle configs retrieved successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
@@ -354,7 +358,7 @@ async def update_data_stream_lifecycle(
         result = await elasticsearch_service.update_data_stream_lifecycle(name, body.data_retention)
         return StandardResponse(success=True, message="Data stream lifecycle configs updated successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
@@ -376,7 +380,7 @@ async def update_data_stream_lifecycle(
         result = await elasticsearch_service.update_data_stream_lifecycle(name, body.data_retention)
         return StandardResponse(success=True, message="Data stream lifecycle configs updated successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
@@ -397,7 +401,7 @@ async def get_data_stream_mappings(
         result = await elasticsearch_service.get_data_stream_mappings(name)
         return StandardResponse(success=True, message="Data stream mappings retrieved successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
@@ -415,7 +419,7 @@ async def modify_data_stream(
         result = await elasticsearch_service.modify_data_stream(body)
         return StandardResponse(success=True, message="Data stream modified successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
@@ -439,7 +443,966 @@ async def modify_data_stream(
         result = await elasticsearch_service.promote_data_stream(name)
         return StandardResponse(success=True, message="Data stream promoted successfully", data=result)
     except ValueError as e:
-        raise HTTPException(status_code=503, detail="Elasticsearch API key not configured")
+        raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
+######################################################## ALL DOCUMENT ENDPOINTS ########################################################
+
+@router.get(
+    "/{index}/search",
+    summary="Search in an index",
+    description="GET {index}/_search. Search in an index (API key auth).",
+)
+async def search_in_index(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str = Path(
+        ...,
+        description="Index name"
+    ),
+    body : SearchInIndexRequest = Body(..., description="Search Request") 
+):
+    """Search for documents in an index."""
+    try:
+        result = await elasticsearch_service.search_in_index(index, body)
+        return StandardResponse(success=True, message="Documents retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    "/{index}/documents",
+    summary="Search for multiple documents in an index",
+    description="GET {index}/_mget. Search for multiple documents in an index (API key auth).",
+)
+async def search_multiple_documents(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str = Path(
+        ...,
+        description="Index name"
+    ),
+    body : SearchMultipleDocumentsRequest = Body(..., description="Search multiple doRequest") 
+):
+    """Search for documents in an index."""
+    try:
+        result = await elasticsearch_service.search_multiple_documents(index, body)
+        return StandardResponse(success=True, message="Documents retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    "/{index}/document/{id}",
+    summary="Search for document by id in an index",
+    description="GET {index}/_doc/{id}. Search for document by id in an index (API key auth).",
+)
+async def search_document_by_id(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str = Path(
+        ...,
+        description="Index name"
+    ),
+    id: str = Path(
+        ...,
+        description="Document id"
+    )
+):
+    """Search for documents in an index."""
+    try:
+        result = await elasticsearch_service.search_document_by_id(index, id)
+        return StandardResponse(success=True, message="Document retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.delete(
+    "/{index}/document/{id}",
+    summary="Delete a document by id in an index",
+    description="DELETE {index}/_doc/{id}. Delete a document by id in an index (API key auth).",
+)
+async def delete_document_by_id(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str = Path(
+        ...,
+        description="Index name"
+    ),
+    id: str = Path(
+        ...,
+        description="Document id"
+    )
+):
+    """Delete a document by id in an index."""
+    try:
+        result = await elasticsearch_service.delete_document_by_id(index, id)
+        return StandardResponse(success=True, message="Document deleted successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.head(
+    "/{index}/document/{id}",
+    summary="Check if a document exists by id in an index",
+    description="HEAD {index}/_doc/{id}. Check if a document exists by id in an index (API key auth).",
+)
+async def check_document_exists_by_id(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str = Path(
+        ...,
+        description="Index name"
+    ),
+    id: str = Path(
+        ...,
+        description="Document id"
+    )
+):
+    """Check if a document exists by id in an index."""
+    try:
+        result = await elasticsearch_service.check_document_exists_by_id(index, id)
+        if not result:
+            raise HTTPException(status_code=404)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.head(
+    "/{index}/source/{id}",
+    summary="Check if the source of a document by id in an index exists",
+    description="HEAD {index}/_source/{id}. Get the source of a document by id in an index (API key auth).",
+)
+async def check_source_exists_by_id(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str = Path(
+        ...,
+        description="Index name"
+    ),
+    id: str = Path(
+        ...,
+        description="Document id"
+    )
+):
+    """Check if the source of a document by id in an index exists."""
+    try:
+        result = await elasticsearch_service.check_source_exists_by_id(index, id)
+        if not result:
+            raise HTTPException(status_code=404)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    "/{index}/source/{id}",
+    summary="Get the source of a document by id in an index",
+    description="GET {index}/_source/{id}. Get the source of a document by id in an index (API key auth).",
+)
+async def get_document_source_by_id(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str = Path(
+        ...,
+        description="Index name"
+    ),
+    id: str = Path(
+        ...,
+        description="Document id"
+    )
+):
+    """Get the source of a document by id in an index."""
+    try:
+        result = await elasticsearch_service.get_document_source_by_id(index, id)
+        return StandardResponse(success=True, message="Document source retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.post(
+    "/documents/reindex",
+    summary="Reindex documents from one index to another",
+    description="POST /_reindex. Reindex documents from one index to another (API key auth).",
+)
+async def reindex_documents(
+    body: ReindexRequest = Body(..., description="Reindex Request"),
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service)
+):
+    """Reindex documents from one index to another."""
+    try:
+        print(body.model_dump())
+        result = await elasticsearch_service.reindex_documents(body)
+        return StandardResponse(success=True, message="Documents reindexed successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    "/{index}/termvectors/{id}",
+    summary="Get term vectors for a document in an index",
+    description="GET {index}/_termvectors. Get term vectors for a document in an index (API key auth).",
+)
+async def get_term_vectors_for_document(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str = Path(
+        ...,
+        description="Index name"
+    ),
+    id: str = Path(
+        ...,
+        description="Document id"
+    )
+):
+    """Get term vectors for a document in an index."""
+    try:
+        result = await elasticsearch_service.get_term_vectors_for_document(index, id)
+        return StandardResponse(success=True, message="Term vectors retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+######################################################## FEATURES ENDPOINTS ########################################################
+        
+@router.get(
+    "/features",
+    summary="Get the features of the cluster",
+    description="GET /_features. Get the features of the cluster (API key auth).",
+)
+async def get_features(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service)
+):
+    """Get the features of the cluster."""
+    try:
+        result = await elasticsearch_service.get_features()
+        return StandardResponse(success=True, message="Features retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.post(
+    "/features/reset",
+    summary="Reset the features of the cluster",
+    description="POST /_features/_reset. Reset the features of the cluster (API key auth).",
+)
+async def reset_features(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service)
+):
+    """Reset the features of the cluster."""
+    try:
+        result = await elasticsearch_service.reset_features()
+        return StandardResponse(success=True, message="Features reset successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+######################################################## Index ENDPOINTS ########################################################
+
+@router.get(
+    "/{index}",
+    summary="Get an index",
+    description="GET {index}. Get an index (API key auth).",
+)
+async def get_index(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str = Path(
+        ...,
+        description="Index name"
+    )
+):
+    """Get index information."""
+    try:
+        result = await elasticsearch_service.get_index(index)
+        return StandardResponse(success=True, message="Index information retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.post(
+    "/{index}",
+    summary="Create an index",
+    description="POST {index}. Create an index (API key auth).",
+)
+async def create_index(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str = Path(
+        ...,
+        description="Index name"
+    ),
+    body: CreateIndexRequest = Body(... , description="Create index request")
+):
+    """Create index."""
+    try:
+        print(body.model_dump(exclude_none=True, by_alias=True))
+        result = await elasticsearch_service.create_index(index, body)
+        return StandardResponse(success=True, message="Index created successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.delete(
+    "/{index}",
+    summary="Delete an index",
+    description="DELETE {index}. Delete an index (API key auth).",
+)
+async def delete_index(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str = Path(
+        ...,
+        description="Index name"
+    ),
+):
+    """Delete index."""
+    try:
+        result = await elasticsearch_service.delete_index(index)
+        return StandardResponse(success=True, message="Index deleted successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.head(
+    "/{index}",
+    summary="Check if an index exists",
+    description="HEAD {index}. Check if an index exists (API key auth).",
+)
+async def check_index_exists(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str = Path(
+        ...,
+        description="Index name"
+    ),
+):
+    """Check if an index exists."""
+    try:
+        result = await elasticsearch_service.check_index_exists(index)
+        if not result:
+            raise HTTPException(status_code=404)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.head(
+    "/component/template/{name}",
+    summary="Check if a component template exists by name",
+    description="HEAD /_component_template/{name}. Check if a component template exists by name (API key auth).",
+)
+async def check_component_template_exists_by_name(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name: str = Path(
+        ...,
+        description="Component template name"
+    )
+):
+    """Check if a component template exists by name."""
+    try:
+        result = await elasticsearch_service.check_component_template_exists_by_name(name)
+        if not result:
+            raise HTTPException(status_code=404)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+ 
+@router.get(
+    "/component/template",
+    summary="Get the component template of the cluster",   
+    description="GET /_component_template. Get the component template of the cluster (API key auth).",
+)
+async def get_component_templates(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name: Optional[str] = Query(
+        default=None,
+        description="template name"
+    )
+):
+    """Get the component template of the cluster."""
+    try:
+        result = await elasticsearch_service.get_component_template(name)
+        return StandardResponse(success=True, message="Component template retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.post(
+    "/component/template/{name}",
+    summary="Create the component template of the cluster",
+    description="POST /_component_template/{name}. Create the component template of the cluster (API key auth).",
+)
+async def create_component_template(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name: str = Path(
+        ...,
+        description="template name"
+    ),
+    body: ComponentTemplateRequest = Body(..., description="Component template request")
+):
+    """Create the component template of the cluster."""
+    try:
+        print(body.model_dump(exclude_none=True, by_alias=True))
+        result = await elasticsearch_service.create_component_template(name, body)
+        return StandardResponse(success=True, message="Component template created successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.put(
+    "/component/template/{name}",
+    summary="Update the component template of the cluster",
+    description="PUT /_component_template/{name}. Update the component template of the cluster (API key auth).",
+)
+async def update_component_template(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name: str = Path(
+        ...,
+        description="template name"
+    ),
+    body: ComponentTemplateRequest = Body(..., description="Component template request")
+):
+    """Update the component template of the cluster."""
+    try:
+        print(body.model_dump(exclude_none=True, by_alias=True))
+        result = await elasticsearch_service.update_component_template(name, body)
+        return StandardResponse(success=True, message="Component template updated successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.delete(
+    "/component/template/{name}",
+    summary="Delete the component templates of the cluster",   
+    description="Delete /_component_templates/{name}. Delete the component templates of the cluster (API key auth).",
+)
+async def delete_component_template(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name: str = Path(
+        ...,
+        description="template name"
+    )
+):
+    """Delete the component templates of the cluster."""
+    try:
+        result = await elasticsearch_service.delete_component_template(name)
+        return StandardResponse(success=True, message="Component template deleted successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    "/index/template/{name}",
+    summary="Get the index template of the cluster",   
+    description="GET /_index_template/{name}. Get the index template of the cluster (API key auth).",
+)
+async def get_index_template(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name: Optional[str] = Path(
+        ...,
+        description="template name"
+    )
+):
+    """Get the index template of the cluster."""
+    try:
+        result = await elasticsearch_service.get_index_template(name)
+        return StandardResponse(success=True, message="Index template retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.post(
+    "/index/template/{name}",
+    summary="Create the index template of the cluster",   
+    description="POST /_index_template/{name}. Create the index template of the cluster (API key auth).",
+)
+async def create_index_template(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name: Optional[str] = Path(
+        ...,
+        description="template name"
+    ),
+    body: IndexTemplateRequest = Body(...,description="Index template request")
+):
+    """Create the index template of the cluster."""
+    try:
+        result = await elasticsearch_service.create_index_template(name, body)
+        return StandardResponse(success=True, message="Index template created successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.put(
+    "/index/template/{name}",
+    summary="Update the index template of the cluster",   
+    description="PUT /_index_template/{name}. Update the index template of the cluster (API key auth).",
+)
+async def update_index_template(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name: Optional[str] = Path(
+        ...,
+        description="template name"
+    ),
+    body: IndexTemplateRequest = Body(...,description="Index template request")
+):
+    """Update the index template of the cluster."""
+    try:
+        result = await elasticsearch_service.update_index_template(name, body)
+        return StandardResponse(success=True, message="Index template updated successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.delete(
+    "/index/template/{name}",
+    summary="Delete the index template of the cluster",   
+    description="DELETE /_index_template/{name}. Delete the index template of the cluster (API key auth).",
+)
+async def delete_index_template(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name: Optional[str] = Path(
+        ...,
+        description="template name"
+    ),
+):
+    """Delete the index template of the cluster."""
+    try:
+        result = await elasticsearch_service.delete_index_template(name)
+        return StandardResponse(success=True, message="Index template deleted successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.head(
+    "/index/template/{name}",
+    summary="Check if an index template exists",   
+    description="HEAD /_index_template/{name}. Check if an index template exists (API key auth).",
+)
+async def check_index_template_exists(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name: Optional[str] = Path(
+        ...,
+        description="template name"
+    ),
+):
+    """Check if an index template exists."""
+    try:
+        result = await elasticsearch_service.check_index_template_exists(name)
+        if not result:
+            raise HTTPException(status_code=404)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.post(
+    "/index/disk/usage/{name}",
+    summary="Get the disk usage of an index",   
+    description="POST {index}/_disk_usage. Get the disk usage of an index (API key auth).",
+)
+async def get_disk_usage_of_index(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name : Optional[str] = Path(
+        ..., 
+        description="index name"
+    )
+):
+    """Get the disk usage of an index."""
+    try:
+        result = await elasticsearch_service.get_disk_usage_of_index(name)
+        return StandardResponse(success=True, message="Disk usage retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.post(
+    "/clear/cache",
+    summary="Clear the cache of the cluster",   
+    description="POST /_clear_cache. Clear the cache of the cluster (API key auth).",
+)
+async def clear_cache_of_index(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name : Optional[str] = Query(
+        ..., 
+        description="index name"
+    )
+):
+    """Clear the cache of the cluster."""
+    try:
+        result = await elasticsearch_service.clear_cache_of_index(name)
+        return StandardResponse(success=True, message="Cache cleared successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.post(
+    "/index/close/{name}",
+    summary="Close an index",   
+    description="POST {index}/_close. Close an index (API key auth).",
+)
+async def close_index(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name : Optional[str] = Path(
+        ..., 
+        description="index name"
+    )
+):
+    """Close an index."""
+    try:
+        result = await elasticsearch_service.close_index(name)
+        return StandardResponse(success=True, message="Index closed successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.post(
+    "/index/open/{name}",
+    summary="Open an index",   
+    description="POST {index}/_open. Open an index (API key auth).",
+)
+async def open_index(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name : Optional[str] = Path(
+        ..., 
+        description="index name"
+    )
+):
+    """Open an index."""
+    try:
+        result = await elasticsearch_service.open_index(name)
+        return StandardResponse(success=True, message="Index opened successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    "/index/recovery",
+    summary="Get the recovery status of an index",
+    description="GET /_recovery. Get the recovery status of an index (API key auth).",
+)
+async def get_recovery_status_of_index(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name: Optional[str] = Query(
+        default=None,
+        description="index name"
+    )
+):
+    """Get the recovery status of an index."""
+    try:
+        result = await elasticsearch_service.get_recovery_status_of_index(name)
+        return StandardResponse(success=True, message="Recovery status retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    "/index/refresh",
+    summary="Refresh an index",
+    description="GET /_refresh. Refresh an index (API key auth).",
+)
+async def refresh_index(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name: Optional[str] = Query(
+        default=None,
+        description="index name"
+    )
+):
+    """Refresh an index."""
+    try:
+        result = await elasticsearch_service.refresh_index(name)
+        return StandardResponse(success=True, message="Refreshed index successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    "/resolve/cluster",
+    summary="Resolve a cluster alias",
+    description="GET /_resolve/cluster. Resolve a cluster alias (API key auth).",
+)
+async def resolve_cluster(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name: Optional[str] = Query(
+        default=None,
+        description="index name"
+    )
+):
+    """Resolve a cluster alias."""
+    try:
+        result = await elasticsearch_service.resolve_cluster(name)
+        return StandardResponse(success=True, message="Cluster alias resolved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    "/resolve/index/{name}",
+    summary="Resolve a cluster alias",
+    description="GET /_resolve/index/{name}. Resolve a cluster alias (API key auth).",
+)
+async def resolve_index(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    name: str = Path(
+        ...,
+        description="index name"
+    )
+):
+    """Resolve an index."""
+    try:
+        result = await elasticsearch_service.resolve_index(name)
+        return StandardResponse(success=True, message="Index resolved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    "/index/alias",
+    summary="Get an alias",
+    description="GET /_alias. Get an alias (API key auth).",
+)
+async def get_alias(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: Optional[str] = Query(
+        default=None,
+        description="index name"
+    ),
+    alias_name: Optional[str] = Query(
+        default=None,
+        description="alias name"
+    )
+):
+    """Get an alias."""
+    try:
+        result = await elasticsearch_service.get_alias(index, alias_name)
+        return StandardResponse(success=True, message="Alias retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.post(
+    "/index/{index}/alias/{alias_name}",
+    summary="Create an alias",
+    description="POST /{index}/_alias/{alias_name}. Create an alias (API key auth).",
+)
+async def create_alias(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str = Path(
+        ...,
+        description="index name"
+    ),
+    alias_name: str = Path(
+        ...,
+        description="alias name"
+    ),
+    body: CreateAliasRequest = Body(...),
+    single: Optional[bool] = Query(
+        default=True,
+        description="If true, creates a single alias, if false, creates a list of aliases"
+    )
+):
+    """Create an alias."""
+    try:
+        result = await elasticsearch_service.create_alias(index, alias_name, body, single)
+        return StandardResponse(success=True, message="Alias created successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.put(
+    "/index/{index}/alias/{alias_name}",
+    summary="Update an alias",
+    description="PUT /{index}/_alias/{alias_name}. Update an alias (API key auth).",
+)
+async def update_alias(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str = Path(
+        ...,
+        description="index name"
+    ),
+    alias_name: str = Path(
+        ...,
+        description="alias name"
+    ),
+    body: CreateAliasRequest = Body(...),
+    single: Optional[bool] = Query(
+        default=True,
+        description="If true, creates a single alias, if false, creates a list of aliases"
+    )
+):
+    """Update an alias."""
+    try:
+        result = await elasticsearch_service.update_alias(index, alias_name, body, single)
+        return StandardResponse(success=True, message="Alias updated successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.delete(
+    "/index/{index}/alias/{alias_name}",
+    summary="Delete an alias",
+    description="DELETE /{index}/_alias/{alias_name}. Delete an alias (API key auth).",
+)
+async def delete_alias(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str = Path(
+        ...,
+        description="index name"
+    ),
+    alias_name: str = Path(
+        ...,
+        description="alias name"
+    ),
+    single: Optional[bool] = Query(
+        default=True,
+        description="If true, deletes a single alias, if false, deletes a list of aliases"
+    )
+):
+    """Delete an alias."""
+    try:
+        result = await elasticsearch_service.delete_alias(index, alias_name, single)
+        return StandardResponse(success=True, message="Alias deleted successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.post(
+    "/index/rollover/{alias_name}",
+    summary="Roll over an index",
+    description="POST {index}/_rollover. Roll over an index (API key auth).",
+)
+async def rollover_index(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    alias_name: str = Path(
+        ...,
+        description="index name"
+    ),
+    body: RollOverIndexRequest = Body(...),
+    new_index_name: Optional[str] = Query(
+        default=None,
+        description="new index name"
+    )
+):
+    """Roll over an index."""
+    try:
+        result = await elasticsearch_service.rollover_index(alias_name, new_index_name, body)
+        return StandardResponse(success=True, message="Index rolled over successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    "/index/settings",
+    summary="Get index settings",
+    description="GET /{index}/_settings. Get index settings (API key auth).",
+)
+async def get_index_settings(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: Optional[str] = Query(
+        default=None,
+        description="index name"
+    ),
+    alias: Optional[str] = Query(
+        default=None,
+        description="alias name"
+    ) 
+):
+    """Get index settings."""
+    try:
+        result = await elasticsearch_service.get_index_settings(index, alias)
+        return StandardResponse(success=True, message="Index settings retrived successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    "/index/segments",
+    summary="Get index segments",
+    description="GET /{index}/_segments. Get index segments (API key auth).",
+)
+async def get_index_segments(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: Optional[str] = Query(
+        default=None,
+        description="index name"
+    ),
+):
+    """Get index segments."""
+    try:
+        result = await elasticsearch_service.get_index_segments(index)
+        return StandardResponse(success=True, message="Index segments retrived successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    "/index/shard/stores",
+    summary="Get index shard stores",
+    description="GET /{index}/_shard_stores. Get index shard stores (API key auth).",
+)
+async def get_index_shard_stores(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: Optional[str] = Query(
+        default=None,
+        description="index name"
+    ),
+):
+    """Get index shard stores."""
+    try:
+        result = await elasticsearch_service.get_index_shard_stores(index)
+        return StandardResponse(success=True, message="Index shard stores retrived successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    "/index/stats",
+    summary="Get index statistics",
+    description="GET /{index}/_stats. Get index stats (API key auth).",
+)
+async def get_index_stats(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: Optional[str] = Query(
+        default=None,
+        description="index name"
+    ),
+    metric: Optional[str] = Query(
+        default=None,
+        description="index name"
+    ),
+):
+    """Get index statistics."""
+    try:
+        result = await elasticsearch_service.get_index_statistics(index, metric)
+        return StandardResponse(success=True, message="Index statistics retrived successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)

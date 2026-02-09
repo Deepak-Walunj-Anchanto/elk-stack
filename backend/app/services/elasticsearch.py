@@ -7,8 +7,11 @@ from __future__ import annotations
 import httpx
 from typing import Any, Optional, List, Dict
 
-from app.core.settings import settings
-from app.models.elasticsearch import DataStreamModifyRequest
+from app.models.elasticsearch import (DataStreamModifyRequest, SearchInIndexRequest, 
+    SearchMultipleDocumentsRequest, ReindexRequest, ClusterAllocationExplainRequest,
+    IndexTemplateRequest, ComponentTemplateRequest, CreateIndexRequest, RollOverIndexRequest,
+    CreateAliasRequest)
+from app.schemas.elasticsearch import SearchDocumentsResponse
 
 class ElasticsearchClientError(Exception):
     """Raised when an ES request fails; status and body available for mapping to HTTP."""
@@ -60,18 +63,25 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
 
-    async def get_cluster_allocation_explain(self) -> Dict[str, Any]:
+    async def get_cluster_allocation_explain(self, explanation: Optional[ClusterAllocationExplainRequest] = None) -> Dict[str, Any]:
         """
         GET /_cluster/allocation/explain
+        POST /_cluster/allocation/explain
         Explains the allocation of a shard to a node.
+        If explanation is provided, it will be used to explain the allocation of a shard to a node.
+        If explanation is not provided, it will return the allocation of all shards to all nodes.
         """
         path = "/_cluster/allocation/explain"
         url = f"{self.url}{path}"
         params = {
             "format": "json"
         }
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url, headers=self._headers(), params=params)
+        if explanation:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, headers=self._headers(), params=params, json=explanation.model_dump(exclude_none=True))
+        else:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, headers=self._headers(), params=params)
         if response.status_code != 200:
             try:
                 body = response.json()
@@ -475,6 +485,885 @@ class ElasticsearchService:
         }
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+######################################################## ALL DOCUMENT ENDPOINTS ########################################################
+    async def search_in_index(self, index: str, body: SearchInIndexRequest) -> Dict[str, Any]:
+        f"""
+        GET /{index}/_search
+        Search for documents in an index.
+        """
+        path = f"/{index}/_search"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        } 
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params, json=body.to_es_payload())
+        if response.status_code != 200:
+            try:
+                error_body = response.json()
+            except Exception:
+                error_body = response.text
+            raise ElasticsearchClientError(response.status_code, error_body)
+        es_data = response.json()
+        total_ids_in_index = es_data["hits"]["total"]["value"]
+        ids_by_index : Dict[str, List[str]] = {}
+        hits_list = es_data["hits"]["hits"]
+        for hit in hits_list:
+            idx = hit["_index"]
+            doc_id = hit["_id"]
+            if idx and doc_id:
+                ids_by_index.setdefault(idx, []).append(doc_id)
+            total_ids_returned = sum(len(v) for v in ids_by_index.values())
+        es_data["ids_by_index"] = ids_by_index
+        es_data["total_ids_returned"] = total_ids_returned
+        es_data["total_ids_in_index"] = total_ids_in_index
+        return SearchDocumentsResponse.model_validate(es_data)
+    
+    async def search_multiple_documents(self, index: str, docs: SearchMultipleDocumentsRequest) -> Dict[str, Any]:
+        f"""
+        POST /{index}/_mget
+        Search for multiple documents in an index.
+        """
+        path = f"/{index}/_mget"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params, json=docs.model_dump(exclude_none=True))
+        if response.status_code != 200:
+            try:
+                error_body = response.json()
+            except Exception:
+                error_body = response.text
+            raise ElasticsearchClientError(response.status_code, error_body)
+        return response.json()
+
+    async def search_document_by_id(self, index: str, id: str) -> Dict[str, Any]:
+        f"""
+        GET /{index}/_doc/{id}
+        Search for a document by id in an index.
+        """
+        path = f"/{index}/_doc/{id}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+
+    async def delete_document_by_id(self, index: str, id: str) -> Dict[str, Any]:
+        f"""
+        DELETE /{index}/_doc/{id}
+        Delete a document by id in an index.
+        """
+        path = f"/{index}/_doc/{id}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.delete(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def check_document_exists_by_id(self, index: str, id: str) -> bool:
+        f"""
+        HEAD /{index}/_doc/{id}
+        Check if a document exists by id in an index.
+        """
+        path = f"/{index}/_doc/{id}"
+        url = f"{self.url}{path}"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.head(url, headers=self._headers())
+        return response.status_code == 200
+    
+    async def check_source_exists_by_id(self, index: str, id: str) -> bool:
+        f"""
+        HEAD /{index}/_source/{id}
+        Check if a source exists by id in an index.
+        """
+        path = f"/{index}/_source/{id}"
+        url = f"{self.url}{path}"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.head(url, headers=self._headers())
+        return response.status_code == 200
+    
+    async def get_document_source_by_id(self, index:str, id:str) -> Dict[str, Any]:
+        f"""
+        GET /{index}/_source/{id}
+        Get the source of a document by id in an index.
+        """
+        path = f"/{index}/_source/{id}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def reindex_documents(self, body: ReindexRequest) -> Dict[str, Any]:
+        f"""
+        POST /_reindex
+        Reindex documents from one index to another.
+        """
+        path = "/_reindex"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params, json=body.model_dump(exclude_none=True))
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+                                    
+    async def get_term_vectors_for_document(self, index: str, id: Optional[str] = None) -> Dict[str, Any]:
+        f"""
+        GET /{index}/_termvectors
+        Get term vectors for a document in an index.
+        """
+        path = f"/{index}/_termvectors"
+        if id:
+            path += f"/{id}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+######################################################## FEATURES ENDPOINTS ########################################################
+    
+    async def get_features(self) -> Dict[str, Any]:
+        f"""
+        GET /_features
+        Get the features of the cluster.
+        """
+        path = f"/_features"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def reset_features(self) -> Dict[str, Any]:
+        f"""
+        POST /_features/_reset
+        RESET the features of the cluster.
+        """
+        path = f"/_features/_reset"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+######################################################## INDEX ENDPOINTS ########################################################
+
+    async def get_index(self, index: str) -> Dict[str, Any]:
+        f"""
+        GET /{index}
+        Get the information of an index.
+        """
+        path = f"/{index}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def create_index(self, index: str, body: CreateIndexRequest) -> Dict[str, Any]:
+        f"""
+        POST /{index}
+        Create an index.
+        """
+        path = f"/{index}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.put(url, headers=self._headers(), params=params, json=body.model_dump(exclude_none=True, by_alias=True))
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def delete_index(self, index: str) -> Dict[str, Any]:
+        f"""
+        DELETE /{index}
+        Delete an index.
+        """
+        path = f"/{index}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.delete(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def check_index_exists(self, index: str) -> bool:
+        f"""
+        HEAD /{index}
+        Check if an index exists.
+        """
+        path = f"/{index}"
+        url = f"{self.url}{path}"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.head(url, headers=self._headers())
+        return response.status_code == 200
+    
+    async def get_component_template(self, name: Optional[str] = None) -> Dict[str, Any]:
+        f"""
+        GET /_component_template
+        Get the component templates of the cluster.
+        If name is provided, get the component template with the given name.
+        """
+        path = f"/_component_template"
+        if name:
+            path += f"/{name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def create_component_template(self, name: str, body: ComponentTemplateRequest) -> Dict[str, Any]:
+        f"""
+        POST /_component_template/{name}
+        Create the component template of the cluster.
+        """
+        path = f"/_component_template/{name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params, json=body.model_dump(exclude_none=True, by_alias=True))
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def update_component_template(self, name: str, body: ComponentTemplateRequest) -> Dict[str, Any]:
+        f"""
+        PUT /_component_template/{name}
+        Update the component template of the cluster.
+        """
+        path = f"/_component_template/{name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.put(url, headers=self._headers(), params=params, json=body.model_dump(exclude_none=True, by_alias=True))
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def check_component_template_exists_by_name(self, name: str) -> bool:
+        f"""
+        HEAD /_component_template/{name}
+        Check if a component template exists by name.
+        """
+        path = f"/_component_template/{name}"
+        url = f"{self.url}{path}"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.head(url, headers=self._headers())
+        return response.status_code == 200
+    
+    async def delete_component_template(self, name: str = None) -> Dict[str, Any]:
+        f"""
+        DELETE /_component_template/{name}
+        Delete the component template of the cluster.
+        """
+        path = f"/_component_template/{name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.delete(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def get_index_template(self, name: str = None) -> Dict[str, Any]:
+        f"""
+        GET /_index_template/{name}
+        Get the index template of the cluster.
+        """
+        path = f"/_index_template/{name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def create_index_template(self, name: str, body: IndexTemplateRequest) -> Dict[str, Any]:
+        f"""
+        POST /_index_template/{name}
+        Create the index template of the cluster.
+        """
+        path = f"/_index_template/{name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params, json=body.model_dump(exclude_none=True))
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def update_index_template(self, name: str, body: IndexTemplateRequest) -> Dict[str, Any]:
+        f"""
+        PUT /_index_template/{name}
+        Update the index template of the cluster.
+        """
+        path = f"/_index_template/{name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.put(url, headers=self._headers(), params=params, json=body.model_dump(exclude_none=True))
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def delete_index_template(self, name: str) -> Dict[str, Any]:
+        f"""
+        DELETE /_index_template/{name}
+        Delete the index template of the cluster.
+        """
+        path = f"/_index_template/{name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.delete(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+
+    async def check_index_template_exists(self, name: str) -> bool:
+        f"""
+        HEAD /_index_template/{name}
+        Check if an index template exists.
+        """
+        path = f"/_index_template/{name}"
+        url = f"{self.url}{path}"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.head(url, headers=self._headers())
+        return response.status_code == 200
+    
+    async def get_disk_usage_of_index(self, name: str) -> Dict[str, Any]:
+        f"""
+        POST /{name}/_disk_usage
+        Get the disk usage of an index.
+        """
+        path = f"/{name}/_disk_usage"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def clear_cache_of_index(self, name: Optional[str] = None) -> Dict[str, Any]:
+        f"""
+        POST /{name}/_cache/clear
+        Clear the cache of an index.
+        """
+        if name:
+            path = f"/{name}/_cache/clear"
+        else:
+            path = f"/_cache/clear"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def close_index(self, name: str) -> Dict[str, Any]:
+        f"""
+        POST /{name}/_close
+        Close an index.
+        """
+        path = f"/{name}/_close"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def open_index(self, name: str) -> Dict[str, Any]:
+        f"""
+        POST /{name}/_open
+        Open an index.
+        """
+        path = f"/{name}/_open"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+
+    async def get_recovery_status_of_index(self, name: Optional[str] = None) -> Dict[str, Any]:
+        f"""
+        GET /_recovery
+        Get index recovery information
+        """
+        if name:
+            path = f"/{name}/_recovery"
+        else:
+            path = f"/_recovery"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def refresh_index(self, name: Optional[str] = None) -> Dict[str, Any]:
+        f"""
+        GET /_refresh
+        Get index recovery information
+        """
+        if name:
+            path = f"/{name}/_refresh"
+        else:
+            path = f"/_refresh"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def resolve_cluster(self, name: Optional[str] = None) -> Dict[str, Any]:
+        f"""
+        GET /_resolve/cluster
+        Resolve a cluster.
+        """
+        if name:
+            path = f"/_resolve/cluster/{name}"
+        else:
+            path = f"/_resolve/cluster"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def resolve_index(self, name: str) -> Dict[str, Any]:
+        f"""
+        GET /_resolve/index/{name}
+        Resolve an index.
+        """
+        path = f"/_resolve/index/{name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def get_alias(self, index: Optional[str] = None, alias_name: Optional[str] = None) -> Dict[str, Any]:
+        f"""
+        GET /_alias
+        GET /_alias/{alias_name}
+        GET /{index}/_alias
+        GET /{index}/_alias/{alias_name}
+        Get an alias.   
+        """
+        if index:
+            path = f"/{index}/_alias"
+        else:
+            path = f"/_alias"
+        if alias_name:
+            path += f"/{alias_name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def create_alias(self, index: str, alias_name: str, body: CreateAliasRequest, single: bool) -> Dict[str, Any]:
+        f"""
+        POST /{index}/_alias/{alias_name}
+        POST /{index}/_aliases/{alias_name}
+        Create an alias.   
+        If single is true, creates a single alias, if false, creates a list of aliases
+        """
+        if single:
+            path = f"/{index}/_alias/{alias_name}"
+        else:
+            path = f"/{index}/_aliases/{alias_name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params, json=body.model_dump(exclude_none=True))
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def update_alias(self, index: str, alias_name: str, body: CreateAliasRequest, single: bool) -> Dict[str, Any]:
+        f"""
+        PUT /{index}/_alias/{alias_name}
+        PUT /{index}/_aliases/{alias_name}
+        Update an alias.   
+        If single is true, updates a single alias, if false, updates a list of aliases
+        """
+        if single:
+            path = f"/{index}/_alias/{alias_name}"  
+        else:
+            path = f"/{index}/_aliases/{alias_name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.put(url, headers=self._headers(), params=params, json=body.model_dump(exclude_none=True))
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def delete_alias(self, index: str, alias_name: str, single: bool) -> Dict[str, Any]:
+        f"""
+        DELETE /{index}/_alias/{alias_name}
+        DELETE /{index}/_aliases/{alias_name}
+        Delete an alias.   
+        If single is true, deletes a single alias, if false, deletes a list of aliases
+        """
+        if single:
+            path = f"/{index}/_alias/{alias_name}"  
+        else:
+            path = f"/{index}/_aliases/{alias_name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.delete(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def rollover_index(self, alias_name: str, new_index_name: Optional[str] = None, body: RollOverIndexRequest = None) -> Dict[str, Any]:
+        f"""
+        POST /{alias_name}/_rollover
+        Roll over an index.
+        """
+        path = f"/{alias_name}/_rollover"
+        if new_index_name:
+            path += f"/{new_index_name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params, json=body.model_dump(exclude_none=True))
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def get_index_settings(self, index_name: Optional[str] = None, alias_name: Optional[str] = None) -> Dict[str, Any]:
+        f"""
+        GET /_settings
+        GET /_settings/{alias_name}
+        GET /{index_name}/_settings
+        GET /{index_name}/_settings/{alias_name}
+        Get index settings.
+        """
+        if index_name:
+            path = f"/{index_name}/_settings"
+        else:
+            path = f"/_settings"
+        if alias_name:
+            path += f"/{alias_name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def get_index_segments(self, index_name: Optional[str] = None) -> Dict[str, Any]:
+        f"""
+        GET /_segments
+        GET /{index_name}/_segments
+        Get index segments.
+        """
+        if index_name:
+            path = f"/{index_name}/_segments"
+        else:
+            path = f"/_segments"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def get_index_shard_stores(self, index_name: Optional[str] = None) -> Dict[str, Any]:
+        f"""
+        GET /_shard_stores
+        GET /{index_name}/_shard_stores
+        Get index shard stores.
+        """
+        if index_name:
+            path = f"/{index_name}/_shard_stores"
+        else:
+            path = f"/_shard_stores"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def get_index_statistics(self, index_name: Optional[str] = None, metric: Optional[str] = None) -> Dict[str, Any]:
+        f"""
+        GET /_stats
+        GET /{index_name}/_stats
+        GET /_stats/{metric}
+        GET /{index_name}/_stats/{metric}
+        Get index statistics.
+        """
+        if index_name:
+            path = f"/{index_name}/_stats"
+        else:
+            path = f"/_stats"
+        if metric:
+            path += f"/{metric}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
         if response.status_code != 200:
             try:
                 body = response.json()
