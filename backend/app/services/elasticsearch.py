@@ -10,7 +10,7 @@ from typing import Any, Optional, List, Dict
 from app.models.elasticsearch import (DataStreamModifyRequest, SearchInIndexRequest, 
     SearchMultipleDocumentsRequest, ReindexRequest, ClusterAllocationExplainRequest,
     IndexTemplateRequest, ComponentTemplateRequest, CreateIndexRequest, RollOverIndexRequest,
-    CreateAliasRequest)
+    CreateAliasRequest, ILMCreateUpdateRequest, ILMMoveToStepRequest, UpdateIndexSettingsRequest)
 from app.schemas.elasticsearch import SearchDocumentsResponse
 
 class ElasticsearchClientError(Exception):
@@ -63,6 +63,28 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
 
+######################################################## CLUSTER ENDPOINTS ########################################################
+
+    async def get_cluster_information(self) -> Dict[str, Any]:
+        """
+        GET /
+        Get cluster information.
+        """
+        path = "/"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
     async def get_cluster_allocation_explain(self, explanation: Optional[ClusterAllocationExplainRequest] = None) -> Dict[str, Any]:
         """
         GET /_cluster/allocation/explain
@@ -89,6 +111,8 @@ class ElasticsearchService:
                 body = response.text
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
+
+######################################################## CAT ENDPOINTS ########################################################
 
     async def list_all_shards(self, index: Optional[str] = None) -> List[Dict[str, Any]]:
         """
@@ -1296,6 +1320,30 @@ class ElasticsearchService:
             raise ElasticsearchClientError(response.status_code, body)
         return response.json()
     
+    async def update_index_settings(self, body: UpdateIndexSettingsRequest, index_name: Optional[str] = None) -> Dict[str, Any]:
+        f"""
+        PUT /_settings
+        PUT /{index_name}/_settings
+        Update index settings.
+        """
+        if index_name:
+            path = f"/{index_name}/_settings"
+        else:
+            path = f"/_settings"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.put(url, headers=self._headers(), params=params, json=body.model_dump(exclude_none=True))
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
     async def get_index_segments(self, index_name: Optional[str] = None) -> Dict[str, Any]:
         f"""
         GET /_segments
@@ -1367,6 +1415,172 @@ class ElasticsearchService:
         if response.status_code != 200:
             try:
                 body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+######################################################## Index Lifecycle Management ########################################################
+
+    async def get_ilm_policy(self, policy_name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        GET /_ilm/policy
+        GET /_ilm/policy/{policy_name}
+        Get ILM policy.
+        """
+        if policy_name:
+            path = f"/_ilm/policy/{policy_name}"
+        else:
+            path = f"/_ilm/policy"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+
+    async def create_update_ilm_policy(self, policy_name: str, body: ILMCreateUpdateRequest) -> Dict[str, Any]:
+        """
+        PUT /_ilm/policy/{policy_name}
+        Create or update ILM policy.
+        """
+        path = f"/_ilm/policy/{policy_name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.put(url, headers=self._headers(), params=params, json=body.model_dump(exclude_none=True, by_alias=True))
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+
+    async def delete_ilm_policy(self, policy_name: str) -> Dict[str, Any]:
+        """
+        DELETE /_ilm/policy/{policy_name}
+        Delete ILM policy.
+        """
+        path = f"/_ilm/policy/{policy_name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.delete(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def explain_ilm_policy(self, index: str) -> Dict[str, Any]:
+        """
+        GET /{index}/_ilm/explain
+        Explain ILM policy.
+        """
+        path = f"/{index}/_ilm/explain"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body= response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def get_ilm_status(self) -> Dict[str, Any]:
+        """
+        GET /_ilm/status
+        Get ILM status.
+        """
+        path = f"/_ilm/status"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body= response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def move_to_next_ilm_step(self, index_name: str, body: ILMMoveToStepRequest) -> Dict[str, Any]:
+        """
+        POST /_ilm/move/{index}
+        Move to next ILM step.
+        """
+        path = f"/_ilm/move/{index_name}"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params, json=body.model_dump(exclude_none=True))
+        if response.status_code != 200:
+            try:
+                body= response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def remove_ilm_policy(self, index: str) -> Dict[str, Any]:
+        f"""
+        POST {index}/_ilm/remove
+        Remove ILM policy.
+        """
+        path = f"/{index}/_ilm/remove"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body= response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def retry_ilm_policy(self, index: str) -> Dict[str, Any]:
+        f"""
+        POST {index}/_ilm/retry
+        Retry ILM policy.
+        """
+        path = f"/{index}/_ilm/retry"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body= response.json()
             except Exception:
                 body = response.text
             raise ElasticsearchClientError(response.status_code, body)

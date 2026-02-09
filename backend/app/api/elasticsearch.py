@@ -10,7 +10,7 @@ from app.services.elasticsearch import ElasticsearchService, ElasticsearchClient
 from app.models.elasticsearch import (DataStreamLifecycleRequest, DataStreamModifyRequest, 
     SearchInIndexRequest, SearchMultipleDocumentsRequest, ReindexRequest, ClusterAllocationExplainRequest,
     IndexTemplateRequest, ComponentTemplateRequest, CreateIndexRequest, RollOverIndexRequest,
-    CreateAliasRequest)
+    CreateAliasRequest, ILMCreateUpdateRequest, ILMMoveToStepRequest, UpdateIndexSettingsRequest)
 from app.schemas.elasticsearch import StandardResponse
 
 router = APIRouter(prefix="/es", tags=["Elasticsearch"])
@@ -38,6 +38,25 @@ def _handle_es_error(exc: ElasticsearchClientError) -> None:
         raise HTTPException(status_code=422, detail=detail)
     raise HTTPException(status_code=503, detail="Search service temporarily unavailable")
 
+######################################################## CLUSTER ENDPOINTS ########################################################
+
+@router.get(
+    "/cluster",
+    summary="Get cluster information",
+    description="GET /. Get cluster information (API key auth).",
+)
+async def get_cluster_information(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service)
+):
+    """Get cluster information."""
+    try:
+        result = await elasticsearch_service.get_cluster_information()
+        return StandardResponse(success=True, message="Cluster information retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
 @router.get(
     "/cluster/allocation/explain",
     summary="Get cluster allocation explain",
@@ -57,6 +76,7 @@ async def get_cluster_allocation_explain(
         _handle_es_error(e)
 
 ######################################################## ALL CAT ENDPOINTS ########################################################
+
 @router.get(
     "/cat/shards",
     summary="List all shards",
@@ -1340,6 +1360,29 @@ async def get_index_settings(
     except ElasticsearchClientError as e:
         _handle_es_error(e)
         
+@router.put(
+    "/index/settings",
+    summary="Update index settings",
+    description="PUT /{index}/_settings. Update index settings (API key auth).",
+)
+async def update_index_settings(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: Optional[str] = Query(
+        default=None,
+        description="index name"
+    ),
+    body: UpdateIndexSettingsRequest = Body(..., description="Update index settings request"),
+):
+    """Update index settings."""
+    try:
+        print(body.model_dump())
+        result = await elasticsearch_service.update_index_settings(body, index)
+        return StandardResponse(success=True, message="Index settings updated successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
 @router.get(
     "/index/segments",
     summary="Get index segments",
@@ -1402,6 +1445,174 @@ async def get_index_stats(
     try:
         result = await elasticsearch_service.get_index_statistics(index, metric)
         return StandardResponse(success=True, message="Index statistics retrived successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+######################################################## Index Lifecycle Management ########################################################
+
+@router.get(
+    "/ilm/policy",
+    summary="Get ILM policies",
+    description="GET /_ilm/policy. Get ILM policies (API key auth).",
+)
+async def get_ilm_policies(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    policy_name: Optional[str] = Query(
+        default=None,
+        description="policy name"
+    )
+):
+    """Get ILM policies."""
+    try:
+        result = await elasticsearch_service.get_ilm_policy(policy_name)
+        return StandardResponse(success=True, message="ILM policies retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.post(
+    "/ilm/policy/{policy_name}",
+    summary="Create ILM policy",
+    description="POST /_ilm/policy/{name}. Create ILM policy (API key auth).",
+)
+async def create_update_ilm_policy(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    policy_name: str =Path(
+        ...,
+        description="policy name"
+    ),
+    body: ILMCreateUpdateRequest = Body(..., description="ILM policy request")
+):
+    """Create ILM policy."""
+    try:
+        result = await elasticsearch_service.create_update_ilm_policy(policy_name, body)
+        return StandardResponse(success=True, message="ILM policy created successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.delete(
+    "/ilm/policy/{policy_name}",
+    summary="Delete ILM policy",
+    description="DELETE /_ilm/policy/{name}. Delete ILM policy (API key auth).",
+)
+async def delete_ilm_policy(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    policy_name: str =Path(
+        ...,
+        description="policy name"
+    )
+):
+    """Delete ILM policy."""
+    try:
+        result = await elasticsearch_service.delete_ilm_policy(policy_name)
+        return StandardResponse(success=True, message="ILM policy deleted successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    "/ilm/{index}/explain",
+    summary="Explain ILM policy",
+    description="GET /{index}/_ilm/explain. Explain ILM policy (API key auth).",
+)
+async def explain_ilm_policy(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str =Path(
+        ...,
+        description="index name"
+    )
+):
+    """Explain ILM policy."""
+    try:
+        result = await elasticsearch_service.explain_ilm_policy(index)
+        return StandardResponse(success=True, message="ILM policy explained successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    "/ilm/status",
+    summary="Get ILM status",
+    description="GET /_ilm/status. Get ILM status (API key auth).",
+)
+async def get_ilm_status(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+):
+    """Get ILM status."""
+    try:
+        result = await elasticsearch_service.get_ilm_status()
+        return StandardResponse(success=True, message="ILM status retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.post(
+    "/ilm/move/{index}",
+    summary="Move to next ILM step",
+    description="POST /_ilm/move/{index}. Move to next ILM step (API key auth).",
+)
+async def move_to_next_ilm_step(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str =Path(
+        ...,
+        description="index name"
+    ),
+    body: ILMMoveToStepRequest = Body(..., description="ILM move to step request")
+):
+    """Move to next ILM step."""
+    try:
+        result = await elasticsearch_service.move_to_next_ilm_step(index, body)
+        return StandardResponse(success=True, message="ILM move to step successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.post(
+    "/ilm/remove/{index}",
+    summary="Remove ILM policy",
+    description="POST /_ilm/remove/{index}. Remove ILM policy (API key auth).",
+)
+async def remove_ilm_policy(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str =Path(
+        ...,
+        description="index name"
+    )
+):
+    """Remove ILM policy."""
+    try:
+        result = await elasticsearch_service.remove_ilm_policy(index)
+        return StandardResponse(success=True, message="ILM policy removed successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.post(
+    "/ilm/retry/{index}",
+    summary="Retry ILM policy",
+    description="POST /_ilm/retry/{index}. Retry ILM policy (API key auth).",
+)
+async def retry_ilm_policy(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: str =Path(
+        ...,
+        description="index name"
+    )
+):
+    """Retry ILM policy."""
+    try:
+        result = await elasticsearch_service.retry_ilm_policy(index)
+        return StandardResponse(success=True, message="ILM policy retried successfully", data=result)
     except ValueError as e:
         raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:

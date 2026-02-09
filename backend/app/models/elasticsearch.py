@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, ConfigDict
 from typing import List, Dict, Any, Optional, Union
 
 class DataStreamLifecycleRequest(BaseModel):
@@ -135,6 +135,12 @@ class IndexSettings(BaseModel):
     number_of_shards: Optional[int] = Field(default=None, description="Number of primary shards (shorthand)")
     number_of_replicas: Optional[int] = Field(default=None, description="Number of replicas (shorthand)")
 
+class UpdateIndexSettingsRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    index: Optional[Dict[str, Any]] = None
+    settings: Optional[Dict[str, Any]] = None
+    
 class FieldMapping(BaseModel):
     type: str
     # you can extend this with other mapping options
@@ -163,3 +169,29 @@ class CreateAliasRequest(BaseModel):
 
 class RollOverIndexRequest(BaseModel):
     rollover_conditions: Optional[RollOverConditions] = Field(default=None, description="Roll over conditions")
+    
+class ILMPhase(BaseModel):
+    actions: Dict[str, Any] = Field(default_factory=dict, description="Actions to perform in the phase")
+
+class ILMPhases(BaseModel):
+    hot: Optional[ILMPhase] = None
+    warm: Optional[ILMPhase] = None
+    cold: Optional[ILMPhase] = None
+    frozen: Optional[ILMPhase] = None
+    delete: Optional[ILMPhase] = None
+
+class ILMPolicy(BaseModel):
+    phases: ILMPhases
+    meta: Optional[Dict[str, Any]] = Field(default=None, description="User metadata", alias="_meta")
+
+class ILMCreateUpdateRequest(BaseModel):
+    policy: ILMPolicy
+    
+class ILMStep(BaseModel):
+    phase: str
+    action: Optional[str] = None
+    name: Optional[str] = None
+
+class ILMMoveToStepRequest(BaseModel):
+    current_step: ILMStep
+    next_step: ILMStep
