@@ -10,7 +10,8 @@ from typing import Any, Optional, List, Dict
 from app.models.elasticsearch import (DataStreamModifyRequest, SearchInIndexRequest, 
     SearchMultipleDocumentsRequest, ReindexRequest, ClusterAllocationExplainRequest,
     IndexTemplateRequest, ComponentTemplateRequest, CreateIndexRequest, RollOverIndexRequest,
-    CreateAliasRequest, ILMCreateUpdateRequest, ILMMoveToStepRequest, UpdateIndexSettingsRequest)
+    CreateAliasRequest, ILMCreateUpdateRequest, ILMMoveToStepRequest, UpdateIndexSettingsRequest,
+    FieldCapsRequest, QueryES)
 from app.schemas.elasticsearch import SearchDocumentsResponse
 
 class ElasticsearchClientError(Exception):
@@ -1581,6 +1582,90 @@ class ElasticsearchService:
         if response.status_code != 200:
             try:
                 body= response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+######################################################## SEARCH ENDPOINTS ########################################################
+
+    async def get_count(self, body: Optional[QueryES] = None, index: Optional[str] = None) -> Dict[str, Any]:
+        """
+        GET /_count
+        GET /{index}/_count
+        Get document count for a data stream, an index, or an entire cluster.
+        """
+        if index:
+            path = f"/{index}/_count"
+        else:
+            path = "/_count"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        if body:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, headers=self._headers(), params=params, json=body.model_dump(exclude_none=True))
+        else:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+
+    async def get_field_capabilities(self, body: FieldCapsRequest, index: Optional[str] = None) -> Dict[str, Any]:
+        """
+        GET /_field_caps
+            GET /{index}/_field_caps
+            Get field capabilities.
+        """
+        if index:
+            path = f"/{index}/_field_caps"
+        else:
+            path = "/_field_caps"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=self._headers(), params=params, json=body.model_dump(exclude_none=True))
+        if response.status_code != 200:
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text
+            raise ElasticsearchClientError(response.status_code, body)
+        return response.json()
+    
+    async def multiple_search(self, body: Optional[QueryES] = None, index: Optional[str] = None) -> Dict[str, Any]:
+        """
+        GET /_msearch
+        POST /_msearch
+        GET /{index}/_msearch
+        POST /{index}/_msearch
+        Multiple search documents in an index.
+        """
+        if index:
+            path = f"/{index}/_msearch"
+        else:
+            path = "/_msearch"
+        url = f"{self.url}{path}"
+        params = {
+            "format": "json"
+        }
+        if body:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, headers=self._headers(), params=params, json=body.model_dump(exclude_none=True))
+        else:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, headers=self._headers(), params=params)
+        if response.status_code != 200:
+            try:
+                body = response.json()
             except Exception:
                 body = response.text
             raise ElasticsearchClientError(response.status_code, body)

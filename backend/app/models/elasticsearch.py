@@ -195,3 +195,11 @@ class ILMStep(BaseModel):
 class ILMMoveToStepRequest(BaseModel):
     current_step: ILMStep
     next_step: ILMStep
+    
+class QueryES(BaseModel):
+    query: Dict[str, Any] = Field(..., description="Query")
+    
+class FieldCapsRequest(BaseModel):
+    fields: Optional[List[str]] = Field(default=None, description="List of fields to get capabilities for")
+    index_filter: Optional[Dict[str, Any]] = Field(default=None, description="Filter to apply to the index")
+    runtime_mappings: Optional[Dict[str, Any]] = Field(default=None, description="Runtime mappings to apply to the index")

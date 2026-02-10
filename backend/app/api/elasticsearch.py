@@ -10,7 +10,8 @@ from app.services.elasticsearch import ElasticsearchService, ElasticsearchClient
 from app.models.elasticsearch import (DataStreamLifecycleRequest, DataStreamModifyRequest, 
     SearchInIndexRequest, SearchMultipleDocumentsRequest, ReindexRequest, ClusterAllocationExplainRequest,
     IndexTemplateRequest, ComponentTemplateRequest, CreateIndexRequest, RollOverIndexRequest,
-    CreateAliasRequest, ILMCreateUpdateRequest, ILMMoveToStepRequest, UpdateIndexSettingsRequest)
+    CreateAliasRequest, ILMCreateUpdateRequest, ILMMoveToStepRequest, UpdateIndexSettingsRequest,
+    FieldCapsRequest, QueryES)
 from app.schemas.elasticsearch import StandardResponse
 
 router = APIRouter(prefix="/es", tags=["Elasticsearch"])
@@ -1613,6 +1614,75 @@ async def retry_ilm_policy(
     try:
         result = await elasticsearch_service.retry_ilm_policy(index)
         return StandardResponse(success=True, message="ILM policy retried successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+######################################################## SEARCH ENDPOINTS ########################################################
+
+@router.get(
+    '/document/count',
+    summary="Get document count for a data stream, an index, or an entire cluster.",
+    description="GET /{index}/_count. Get document count for a data stream, an index, or an entire cluster. (API key auth).",
+)
+async def get_document_count(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: Optional[str] = Query(
+        default=None,
+        description="A comma-separated list of data streams, indices, and aliases to search."
+    ),
+    body: Optional[QueryES] = Body(default=None, description="Query")
+):
+    """Get document count for a data stream, an index, or an entire cluster."""
+    try:
+        print("Hi")
+        result = await elasticsearch_service.get_count(index, body)
+        return StandardResponse(success=True, message="Document count retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    '/field/caps',
+    summary="Get field capabilities",
+    description="GET /{index}/_field_caps. Get field capabilities (API key auth).",
+)
+async def get_field_capabilities(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: Optional[str] = Query(
+        default=None,
+        description="Index name"
+    ),
+    body: FieldCapsRequest = Body(..., description="Field capabilities request")
+):
+    """Get field capabilities."""
+    try:
+        result = await elasticsearch_service.get_field_capabilities(body, index)
+        return StandardResponse(success=True, message="Field capabilities retrieved successfully", data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=e)
+    except ElasticsearchClientError as e:
+        _handle_es_error(e)
+        
+@router.get(
+    '/document/msearch',
+    summary="Multiple search documents in an index",
+    description="GET /{index}/_msearch. Multiple search documents in an index (API key auth).",
+)
+async def multiple_search(
+    elasticsearch_service: ElasticsearchService = Depends(get_elasticsearch_service),
+    index: Optional[str] = Query(
+        default=None,
+        description="A comma-separated list of data streams, indices, and aliases to search."
+    ),
+    body: Optional[QueryES] = Body(default=None, description="Query")
+):
+    """Multiple search documents in an index."""
+    try:
+        result = await elasticsearch_service.multiple_search(body, index)
+        return StandardResponse(success=True, message="Multiple search documents in an index retrieved successfully", data=result)
     except ValueError as e:
         raise HTTPException(status_code=503, detail=e)
     except ElasticsearchClientError as e:
